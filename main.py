@@ -17,12 +17,15 @@ def remove_folder(name):
 
 if __name__ == '__main__':
 
-    authenticator = Auth('192.168.1.1', 'user', 'samba_folder', name='DEFAULT')
+    # To authenticate user and store password in Windows Credential Manager use:
+    # authenticator = Auth('192.168.1.1', 'user', 'smb_folder', password='pass' name='DEFAULT', service_name='musicSMBsync', store_credential=True)
+    # Instead if you have already store it you can use:
+    authenticator = Auth('192.168.1.1', 'user', 'smb', name='DEFAULT')
     musicFolder = "/MEDIA/Music/"
     localFolder = "D://Music/"
     # Folders to ignore
     blackList = []
-    # Folder to consider
+    # Folders to consider
     whiteList = []
     # Use only one between white or black list
     # if none is used then every folder will be in white list
