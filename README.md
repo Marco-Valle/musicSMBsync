@@ -1,5 +1,6 @@
 # musicSMBsync
-I've written this Python3 software, because I needed to synchronize a folder on samba server with one on a local resource. This is  not the most powerful and fast tool you can find, but it's really useful for my situation maybe also for yours. 
+I've written this Python3 software, because I needed to synchronize a folder on samba server with one on a local resource.
+This is  not the most powerful solutions, but it works sufficently great.
 
 ### Prerequisites
 
@@ -8,23 +9,25 @@ I've written this Python3 software, because I needed to synchronize a folder on 
 
 ### Installing
 
-You can compile by yourself for the standalone usage or you can simply install requirements and execute it as normal python script.
 ```
 pip3 install -r requirements.txt 
 ```
 
+### Usage
+```
+python3 sync.py --help
+
+Examples:
+python3 sync.py 127.0.0.1 user smb --password my_pass --store_passord --local_folder D://Music --white-list My__Test__Folder
+python3 sync.py 127.0.0.1 user smb --verbose --music_folder Music --black-list My__Test__Folder
+```
+
 ## How it works
 
-The software first authenticate user to server (using password provide, or using password stored in Windows Credential Manager).
-Second it gets the list of all the folders in main remote resource and use it to determinate the music genres.
-Third it checks if remote folders are present in local resource, if it not, it will download them. If they are all present it will start to download folder per folder in Temp directory.
-Fourth script tries to update GENRE mp3 tag of all file where is possible, according to parent folder name.
-Fifth it uploads to server a fixed amount of bytes (25000 for default) to synchronize genres. This is much faster then uploading entire file.
-Sixth it checks the hashes (sha256) between local resources and server's ones, if there are some modification in a folder, script downloads it from server and copies it from temp directory (or on whatever it was working on) to local resource.
-And at the end it cleans all environment.
-
-If you find a tmp file in script folder, is because software uses it to fix the amount of data to store on server and then it deletes it, it's safe to remove.
-You can use white and black lists (not both together) to select which folder synchronize.
+This script is able to authenticate on samba server, with a given credentials or the ones in the Windows Credential Manager; then it checks for all the files and the subfolders in the directory smb-folder/Music-folder/ and compares them with the folders in the white or in the black list.
+Then it determinates the Genre of the mp3 file using the folders' structure (this is not the best, but it a simmple way to label the music) and it uses hashes to check if there are some modifications between the files, if there are, it copies the files to the local resourse (eg. USB drive).
+Eventually it cleans everything.
+You can use white or black list (not both together) to select which folder you want to synchronize (remember that if you want to include House/Deep you have to write both --white_list House House/Deep).
 
 ## Authors
 
