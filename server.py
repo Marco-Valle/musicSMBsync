@@ -22,8 +22,8 @@ class Server:
     def __bool__(self):
         return self.status
 
-    def get_folder(self, dir):
-        return self.conn.listPath(self.folder, dir)
+    def get_folder(self, my_dir):
+        return self.conn.listPath(self.folder, my_dir)
 
     def get_file(self, path, local_file):
         self.conn.retrieveFile('smb', path, local_file)
@@ -33,13 +33,12 @@ class Server:
             buf = file.read()
         buf = buf[:Server.MP3_HEADER_SIZE]
         # Write the HEADER to tmp file
-        with open('tmp', 'wb') as tmp:
-            tmp.write(buf)
+        with open('tmp', 'wb') as fp:
+            fp.write(buf)
         # Write the HEADER to server file
-        with open('tmp', 'rb') as tmp:
-            bytes_written = self.conn.storeFileFromOffset('smb', path, tmp, offset=0, truncate=False)
+        with open('tmp', 'rb') as fp:
+            bytes_written = self.conn.storeFileFromOffset('smb', path, fp, offset=0, truncate=False)
         remove('tmp')
         if bytes_written == Server.MP3_HEADER_SIZE:
             return True
-        else:
-            return False
+        return False

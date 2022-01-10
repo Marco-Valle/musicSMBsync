@@ -1,8 +1,8 @@
 from hashlib import sha256
-from os import path as ospath
-from os import makedirs, scandir, remove
-from tqdm import tqdm
+from os.path import isdir, isfile
+from os import makedirs, walk, remove
 from shutil import copy2, rmtree
+from tqdm import tqdm
 from songs_manager import Song
 import tempfile
 
@@ -11,176 +11,180 @@ class Synchronizer:
 
     BLOCK_SIZE = 65536                                          # The size of each read from the file for hashing
     TMP_FOLDER = tempfile.gettempdir().replace('\\', '/')       # The tmp folder where software can download things
-    TMP_FOLDER += "/musicSMBsync"
+    TMP_FOLDER += "/musicSMBsync/"
 
-    def __init__(self, server, local_folder, server_folder):
+    def __init__(self, server, local_folder, server_folder, white_list, black_list, verbosity=False, remove_not_present=False):
 
         self.server = server
         self.local_dir = local_folder                               # Local folder to sync
-        self.server_dir = self.server.get_folder(server_folder)     # Main server folder
+        self.server_dir = server.get_folder(server_folder)          # Main server folder
         self.server_dir_name = server_folder                        # Its name
-        self.folders_name = []                                      # List of all folders filename
-        self.current_dir = False                                    # The open folder use open_dir()
-        self.current_dir_path = False                               # Its path
-        self.current_dir_name = False                               # Its name
-        self.files = []                                             # Files of current opened folder
-        self.hashes = []                                            # Hashes of the files in directory
-        self.exist_locally = False                                  # If current folder exist in local path
-        self.missing_files = []                                     # The files that are different between server and client
+        self.verbosity = verbosity
+        self.remove = remove_not_present
 
-        self.get_folders_name()
-        Synchronizer.check_tmp_folder()
+        self.white_list = white_list
+        self.black_list = black_list
+        self.folders_name = []                                      # List of all folders filename
+        self.files = []                                             # All the files
+
+        self.recursive_search('', [])
+
+        if self.local_dir[-1] != '/':
+            self.local_dir += '/'
 
     def __str__(self):
         string = "Synchronizer: SMB server {}, local folder: {}, remote folder: {}".format(
             self.server.ip, self.local_dir, self.server_dir_name)
-        string += "\nOpen folder: {}".format(self.current_dir_path)
-        for f in self.files:
-            string += "\n{}".format(f)
         return string
 
+    def __call__(self, *args, **kwargs):
+        try:
+            Synchronizer.check_tmp_folder()
+            self.create_folders_structure()
+            self.handle_files()
+            self.local_clean()
+        except KeyboardInterrupt:
+            print("KeyboardInterrupt - Stop")
+            return
+
     def get_folders_name(self):
-        self.folders_name = []
-        for d in self.server_dir:
-            name = d.filename
-            is_folder = d.isDirectory
-            if name != '..' and name != '.' and is_folder:
-                self.folders_name.append(name)
-                self.open_dir(name, add_folder_to_list=True)
-        for name in self.folders_name:
-            if name != '..' and name != '.':
-                self.open_dir(name, add_folder_to_list=True)
         return self.folders_name
 
-    def open_dir(self, folder_name, add_folder_to_list=False):
-        self.files = []
-        self.current_dir_name = folder_name
-        self.current_dir_path = '{}{}'.format(self.server_dir_name, folder_name)
-        self.current_dir = self.server.get_folder(self.current_dir_path)
-        parent_folders = []
-        for f in self.current_dir:
-            name = f.filename
-            is_folder = f.isDirectory
-            if name != '..' and name != '.':
-                if is_folder and add_folder_to_list:
-                    self.folders_name.append("{}/{}".format(folder_name, name))
-                    parent_folders.append(folder_name)
-                else:
-                    self.files.append(name)
-        # Remove duplicates from parent folders list
-        parent_folders = list(dict.fromkeys(parent_folders))
-        # If there is a parent folder remove it
-        for f in parent_folders:
-            self.folders_name.remove(f)
-        self.exist_locally = ospath.isdir('{}{}'.format(self.local_dir, folder_name))
+    def get_server_path(self, relative_path):
+        return "{}{}".format(self.server_dir_name, relative_path)
 
-    def download_dir(self, work_on_tmp=False):
-        if self.local_dir[-1] != '/':
-            self.local_dir += '/'
-        if self.current_dir is not False:
-            if work_on_tmp:
-                parent_path = '{}/'.format(Synchronizer.TMP_FOLDER)
-            else:
-                parent_path = self.local_dir
-            parent_path += '{}/'.format(self.current_dir_name)
-            if ospath.isdir(parent_path) is False:
-                makedirs(parent_path, exist_ok=True)
-            for file in tqdm(self.files):
-                path = '{}/{}'.format(self.current_dir_path, file)  # Remote path
-                with open('{}{}'.format(parent_path, file), 'wb') as f:
-                    self.server.get_file(path, f)
+    def get_local_path(self, relative_path):
+        return "{}{}".format(self.local_dir, relative_path)
 
-    def update_genres(self, work_on_tmp=False):
-        print("Update genres of {} songs".format(len(self.files)))
-        for file in tqdm(self.files):
-            if work_on_tmp:
-                path = '{}/{}/{}'.format(Synchronizer.TMP_FOLDER, self.current_dir_name, file)
+    def check_folder(self, folder):
+        folder = folder.strip('/').replace(self.local_dir, '').replace(' ', '__')
+        if len(self.white_list) == len(self.black_list) == 0:
+            return 1
+        if len(self.white_list) == 0 and folder not in self.black_list:
+            return 1
+        return folder in self.white_list
+
+    def recursive_search(self, folder_name, parents):
+        if not Synchronizer.is_child_path(folder_name):
+            return
+        tmp_parents = parents[:-1]
+        directory = self.server.get_folder(self.get_server_path("{}/{}".format('/'.join(tmp_parents), folder_name)))
+        for item in directory:
+            if not Synchronizer.is_child_path(item.filename):
+                continue
+            new_path = "{}/{}".format('/'.join(parents), item.filename).replace('//', '/')
+            if item.isDirectory:
+                if not self.check_folder(new_path):
+                    continue
+                local_path = "{}{}".format(self.local_dir, new_path[1:])
+                new_folder = Synchronizer.get_my_dict(new_path, isdir(local_path))
+                self.folders_name.append(new_folder)
+                parents.append(item.filename)
+                self.recursive_search(item.filename, parents)
+                parents.pop()
             else:
-                path = '{}/{}/{}'.format(self.local_dir, self.current_dir_name, file)
-            genre = self.current_dir_name
+                new_file = Synchronizer.get_my_dict(new_path.strip('/'), isfile(self.get_local_path(new_path)))
+                self.files.append(new_file)
+
+    def create_folders_structure(self):
+        tmp_parent_path = '{}/'.format(Synchronizer.TMP_FOLDER)
+        for folder in self.folders_name:
+            folder_name, exists = folder.values()
+            makedirs("{}/{}".format(tmp_parent_path, folder_name), exist_ok=True)
+            makedirs("{}{}".format(self.local_dir, folder_name), exist_ok=True)
+
+    def handle_files(self):
+        self.log("Start sync")
+        for file in tqdm(self.files, disable=self.verbosity):
+            filename, exists = file.values()
+            tmp_path = '{}{}'.format(Synchronizer.TMP_FOLDER, filename)
+            local_path = '{}{}'.format(self.local_dir, filename)
+            if exists:
+                path = tmp_path
+            else:
+                path = local_path
+            # Download the file
+            self.log("Download {}".format(filename))
+            with open(path, 'wb') as fp:
+                self.server.get_file(self.get_server_path(filename), fp)
+            # Update the genre
             song = Song(path)
-            if song.status:
-                song.update_genre(genre)
+            if not song.status:
+                continue
+            genre = Synchronizer.get_genre_from_path(filename)
+            self.log("Update the genre of {} to {}".format(filename, genre))
+            song.update_genre(genre)
+            # Sync the genre with the server
+            if not self.server.update_header(self.get_server_path(filename), path):
+                print("Error occurred synchronizing file {}".format(filename))
+            if not exists:
+                continue
+            # Compare the existing file with the now one
+            tmp_hash = Synchronizer.hash_from_file(tmp_path)
+            local_hash = Synchronizer.hash_from_file(local_path)
+            if tmp_hash != local_hash:
+                self.log("Server file is changed ({})".format(local_path))
+                copy2(tmp_path, local_path)
+            remove(tmp_path)
+        self.log("End sync")
 
-    def sync_genres(self, work_on_tmp=False):
-        print("Sync genres of {} songs with server".format(len(self.files)))
-        for file in tqdm(self.files):
-            if work_on_tmp:
-                local_path = '{}/{}/{}'.format(Synchronizer.TMP_FOLDER, self.current_dir_name, file)
-            else:
-                local_path = '{}/{}/{}'.format(self.local_dir, self.current_dir_name, file)
-            remote_path = '{}/{}'.format(self.current_dir_path, file)
-            if self.server.update_header(remote_path, local_path) is False:
-                print("Error occurred synchronizing file {}".format(file))
+    def local_clean(self):
+        self.log("Start cleaning")
+        my_files = [file['name'] for file in self.files]
+        for root, dirs, files in walk(self.local_dir, topdown=False):
+            root = root.replace('\\', '/')
+            if not self.check_folder(root):
+                continue
+            for file in files:
+                path = '{}/{}'.format(root, file)
+                short_path = path.replace(self.local_dir, '')
+                if short_path in my_files:
+                    continue
+                if self.remove:
+                    remove(path)
+                    self.log("File {} removed because it wasn't on server".format(path))
 
-    def compute_hashes(self, work_on_tmp=False, is_check=False):
-        if is_check:
-            hashes = []
-        else:
-            self.hashes = []
-        if is_check or work_on_tmp is False:
-            parent_path = self.local_dir
-        else:
-            parent_path = '{}/'.format(Synchronizer.TMP_FOLDER)
-        parent_path += '{}/'.format(self.current_dir_name)
-        for file in self.files:
-            file_hash = sha256()
-            try:
-                with open('{}{}'.format(parent_path, file), 'rb') as f:
-                    # Compute hash
-                    fb = f.read(Synchronizer.BLOCK_SIZE)
-                    while len(fb) > 0:
-                        file_hash.update(fb)
-                        fb = f.read(Synchronizer.BLOCK_SIZE)
-                if is_check:
-                    hashes.append(file_hash.hexdigest())
-                else:
-                    self.hashes.append(file_hash.hexdigest())
-            except FileNotFoundError:
-                if is_check:
-                    hashes.append(None)
-        if is_check:
-            return hashes
+    def log(self, string, flush=False):
+        if self.verbosity:
+            print(string, flush=flush)
 
-    def check_hashes(self):
-        assert len(self.hashes) != 0, "Call compute_hashes() before"
-        self.missing_files = []
-        hashes = self.compute_hashes(is_check=True)
-        idx = 0
-        while idx < len(self.hashes):
-            if hashes[idx] != self.hashes[idx]:
-                self.missing_files.append(self.files[idx])
-            idx += 1
+    @staticmethod
+    def hash_from_file(path):
+        file_hash = sha256()
+        try:
+            with open(path, 'rb') as fp:
+                fb = fp.read(Synchronizer.BLOCK_SIZE)
+                while len(fb) > 0:
+                    file_hash.update(fb)
+                    fb = fp.read(Synchronizer.BLOCK_SIZE)
+        except FileNotFoundError:
+            print("Can't find the file {} during sync".format(path))
+            return None
+        return file_hash.hexdigest()
 
-    def copy_missing(self):
-        if len(self.missing_files) == 0:
-            return True
-        else:
-            parent_path = '{}/'.format(Synchronizer.TMP_FOLDER)
-            parent_path += '{}/'.format(self.current_dir_name)
-            local_dir = self.local_dir + '{}/'.format(self.current_dir_name)
-            for file in self.missing_files:
-                copy2('{}/{}'.format(parent_path, file), '{}{}'.format(local_dir, file))
-            self.missing_files = []
-            return True
+    @staticmethod
+    def get_genre_from_path(path):
+        return path.replace('/{}'.format(path.split('/')[-1]), '')
 
-    def check_existence(self, delete=True):
-        # Check if there are some files locally that are not stored in server folder
-        # and if it is necessary delete them
-        missing_file = []
-        folder = '{}/{}'.format(self.local_dir, self.current_dir_name)
-        for file in scandir(folder):
-            if file.is_file():
-                if (file.path.split('\\')[-1] in self.files) is False:
-                    if delete:
-                        remove(file)
-                        print("File {} removed because it wasn't on server".format(file.path))
-                    missing_file.append(file)
-        return missing_file
+    @staticmethod
+    def get_hash_dict(path, hex_hash):
+        new_hash = {
+            'name': path,
+            'hash': hex_hash
+        }
+        return new_hash
+
+    @staticmethod
+    def get_my_dict(name, exists_locally):
+        folder = {
+            'name': name,
+            'exists': exists_locally
+        }
+        return folder
 
     @staticmethod
     def clean_temp():
-        if ospath.isdir(Synchronizer.TMP_FOLDER):
+        if isdir(Synchronizer.TMP_FOLDER):
             # Clear it
             rmtree(Synchronizer.TMP_FOLDER)
 
@@ -191,3 +195,7 @@ class Synchronizer:
         # Create it
         makedirs(Synchronizer.TMP_FOLDER, exist_ok=True)
         print("Tmp folder created: {}".format(Synchronizer.TMP_FOLDER))
+
+    @staticmethod
+    def is_child_path(path):
+        return not(path.startswith('..') or path.startswith('.'))
