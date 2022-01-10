@@ -71,6 +71,10 @@ def main():
                          )
 
     server = authenticator()
+    if not server.is_ready():
+        print("Can't connect to the server {}:{}".format(args.host, port))
+        exit(1)
+
     show_server(server)
     synchronizer = Synchronizer(server, local_folder, music_folder, white_list, black_list,
                                 verbosity=args.verbose, remove_not_present=args.remove)

@@ -91,7 +91,11 @@ class Synchronizer:
         for folder in self.folders_name:
             folder_name, exists = folder.values()
             makedirs("{}/{}".format(tmp_parent_path, folder_name), exist_ok=True)
-            makedirs("{}{}".format(self.local_dir, folder_name), exist_ok=True)
+            try:
+                makedirs("{}{}".format(self.local_dir, folder_name), exist_ok=True)
+            except IOError:
+                print("Local resource not accessible. Abort.")
+                exit(1)
 
     def handle_files(self):
         self.log("Start sync")

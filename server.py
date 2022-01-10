@@ -14,13 +14,20 @@ class Server:
         self.user = user
         self.folder = folder
         self.conn = SMBConnection(self.user, password, self.ip, self.name, use_ntlm_v2=ntlm)
-        self.status = self.conn.connect(self.ip, self.port)
+        try:
+            self.status = self.conn.connect(self.ip, self.port)
+        except Exception as e:
+            print("Exception: {}".format(e))
+            self.status = None
 
     def __str__(self):
         return "SMB server {} at {}, logged by user {}".format(self.name, self.ip, self.user)
 
     def __bool__(self):
         return self.status
+
+    def is_ready(self):
+        return self.status is not None
 
     def get_folder(self, my_dir):
         return self.conn.listPath(self.folder, my_dir)
