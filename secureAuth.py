@@ -1,5 +1,4 @@
 from server import Server
-from platform import system
 import keyring
 
 
@@ -12,7 +11,7 @@ class Auth:
         self.ip = ip
         self.user = user
 
-        # If required get password from Windows Credential Manager
+        # If required get password from Windows Credential Manager or from another supported keyring
         if not password or password is None:
             password = Auth.get_password(service_name, self.user)
             assert password, "No password stored for service {} and user {}".format(service_name, self.user)
@@ -35,13 +34,7 @@ class Auth:
         return self.server
 
     @staticmethod
-    def is_windows():
-        return system() == 'Windows'
-
-    @staticmethod
     def get_password(service, user):
-        if not Auth.is_windows():
-            return False
         password = keyring.get_password(service, user)
         if password is None:
             return False
@@ -50,5 +43,4 @@ class Auth:
 
     @staticmethod
     def store_password(service, user, password):
-        if Auth.is_windows():
-            keyring.set_password(service, user, password)
+        keyring.set_password(service, user, password)

@@ -25,7 +25,7 @@ class Parser:
         self.parser.add_argument('--music_folder', type=str, nargs='?', help='The name of the remote folder where the music is located')
         self.parser.add_argument('--group', type=str, nargs='?', help='The name of the samba group')
         self.parser.add_argument('--service_name', type=str, nargs='?', help='The service name in windows credential manager (default: musicSMBsync)')
-        self.parser.add_argument('--store_password', action='store_true', help='Store the password in the windows credential manager')
+        self.parser.add_argument('--store_password', action='store_true', help='Store the password in the keyring')
         self.parser.add_argument('--verbose', action='store_true', help='Verbosity')
         self.parser.add_argument('--remove', action='store_true', help="Remove the folder which aren't on the server")
         self.parser.add_argument('--white_list', type=str, nargs='+', help='The files in white_list (__ to add space)')

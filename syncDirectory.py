@@ -42,7 +42,8 @@ class Synchronizer:
             Synchronizer.check_tmp_folder()
             self.create_folders_structure()
             self.handle_files()
-            self.local_clean()
+            if self.remove:
+                self.local_clean()
         except KeyboardInterrupt:
             print("KeyboardInterrupt - Stop")
             return
@@ -144,9 +145,8 @@ class Synchronizer:
                 short_path = path.replace(self.local_dir, '')
                 if short_path in my_files:
                     continue
-                if self.remove:
-                    remove(path)
-                    self.log("File {} removed because it wasn't on server".format(path))
+                remove(path)
+                self.log("File {} removed because it wasn't on server".format(path))
 
     def log(self, string, flush=False):
         if self.verbosity:
