@@ -25,7 +25,7 @@ python3 sync.py 127.0.0.1 user smb --verbose --music_folder Music --black-list M
 ## How it works
 
 This script is able to authenticate on samba server, with a given credentials or the ones in the keyring (eg. Windows Credential Manager); then it checks for all the files and the subfolders in the directory smb-folder/Music-folder/ and compares them with the folders in the white or in the black list.
-Then it determinates the Genre of the mp3 file using the folders' structure (this is not the best, but it a simmple way to label the music) and it uses hashes to check if there are some modifications between the files, if there are, it copies the files to the local resourse (eg. USB drive).
+Then it determinates the Genre of the mp3 file using the folders' structure (this is not the best, but it is a simple way to label the music) and it uses hashes to check if there are some modifications between the files, if there are, it copies the files to the local resourse (eg. USB drive).
 Eventually it cleans everything.
 You can use white or black list (not both together) to select which folder you want to synchronize (remember that if you want to include House/Deep you have to write both --white_list House House/Deep).
 
