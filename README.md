@@ -18,8 +18,8 @@ pip3 install -r requirements.txt
 python3 sync.py --help
 
 Examples:
-python3 sync.py 127.0.0.1 user smb --password my_pass --store_passord --local_folder D://Music --white-list My__Test__Folder
-python3 sync.py 127.0.0.1 user smb --verbose --music_folder Music --black-list My__Test__Folder
+python3 sync.py 127.0.0.1 user smb --password my_pass --store_passord --local_folder D://Music --white_list My__Test__Folder
+python3 sync.py 127.0.0.1 user smb --verbose --music_folder Music --black_list My__Test__Folder
 ```
 
 ## How it works
